@@ -27,9 +27,37 @@
 * [安装bro源码编译所需依赖lib](#安装bro源码编译所需依赖lib)
 * [经验证，使用系统自带 python 环境可以正常编译，但如果使用 pyenv 或 pipenv 方式安装的 python 环境编译bro源码在make时会报错异常退出](#经验证使用系统自带-python-环境可以正常编译但如果使用-pyenv-或-pipenv-方式安装的-python-环境编译bro源码在make时会报错异常退出)
 * [解压缩源代码](#解压缩源代码)
+* [可以使用 pyenv 安装的 python 3.6.4 环境](#可以使用-pyenv-安装的-python-364-环境)
+* [确保 bro-pkg 下载的脚本能被写入当前bro安装路径下的 script_dir 和 plugin_dir](#确保-bro-pkg-下载的脚本能被写入当前bro安装路径下的-script_dir-和-plugin_dir)
+* [script_dir: set to the location of Bro’s site scripts directory (e.g. <bro_install_prefix>/share/bro/site)](#script_dir-set-to-the-location-of-bros-site-scripts-directory-eg-bro_install_prefixsharebrosite)
+* [plugin_dir: set to the location of Bro’s default plugin directory (e.g. <bro_install_prefix>/lib/bro/plugins)](#plugin_dir-set-to-the-location-of-bros-default-plugin-directory-eg-bro_install_prefixlibbroplugins)
+* [源码方式安装的bro，默认 <bro_install_prefix> 是 /usr/local/bro](#源码方式安装的bro默认-bro_install_prefix-是-usrlocalbro)
+* [修改 script_dir 和 plugin_dir 的权限，使得当前用户执行 bro-pkg install 时可以直接写入相关目录](#修改-script_dir-和-plugin_dir-的权限使得当前用户执行-bro-pkg-install-时可以直接写入相关目录)
+* [编辑 <bro_install_prefix>/share/bro/site/local.bro](#编辑-bro_install_prefixsharebrositelocalbro)
+* [添加@load packages 到上述文件的最后一行](#添加load-packages-到上述文件的最后一行)
+* [实现 bro-pkg install 的bro脚本和插件能够被自动加载](#实现-bro-pkg-install-的bro脚本和插件能够被自动加载)
+* [从源码仓库检查并刷新 bro-pkg 本地缓存的pkg元数据信息](#从源码仓库检查并刷新-bro-pkg-本地缓存的pkg元数据信息)
+* [安装 shellshock 检测插件](#安装-shellshock-检测插件)
+* [编辑 /usr/local/bro/etc/node.cfg 修改 interface 为 bro 监听的网卡标识](#编辑-usrlocalbroetcnodecfg-修改-interface-为-bro-监听的网卡标识)
+* [解决 bro 在进行TCP/UDP报文解析时无法正确计算报文校验和错误](#解决-bro-在进行tcpudp报文解析时无法正确计算报文校验和错误)
+* [经过上述配置，bro已经成功的运行起来，检查一下 bro 的运行情况](#经过上述配置bro已经成功的运行起来检查一下-bro-的运行情况)
+* [root     17538  0.0  0.1  14304  3252 ?        S    12:37   0:00 /bin/bash /usr/local/bro/share/broctl/scripts/run-bro -1 -i ens19 -U .status -p broctl -p broctl-live -p standalone -p local -p bro local.bro broctl broctl/standalone broctl/auto](#root-----17538--00--01--14304--3252---------s----1237---000-binbash-usrlocalbrosharebroctlscriptsrun-bro--1--i-ens19--u-status--p-broctl--p-broctl-live--p-standalone--p-local--p-bro-localbro-broctl-broctlstandalone-broctlauto)
+* [root     17544 36.6  9.4 517276 193380 ?       Rl   12:37   0:04 /usr/local/bro/bin/bro -i ens19 -U .status -p broctl -p broctl-live -p standalone -p local -p bro local.bro broctl broctl/standalone broctl/auto](#root-----17544-366--94-517276-193380--------rl---1237---004-usrlocalbrobinbro--i-ens19--u-status--p-broctl--p-broctl-live--p-standalone--p-local--p-bro-localbro-broctl-broctlstandalone-broctlauto)
+* [root     17546  0.0  9.0 296080 185828 ?       SN   12:37   0:00 /usr/local/bro/bin/bro -i ens19 -U .status -p broctl -p broctl-live -p standalone -p local -p bro local.bro broctl broctl/standalone broctl/auto](#root-----17546--00--90-296080-185828--------sn---1237---000-usrlocalbrobinbro--i-ens19--u-status--p-broctl--p-broctl-live--p-standalone--p-local--p-bro-localbro-broctl-broctlstandalone-broctlauto)
+* [在 攻击机 上重复对 靶机 的各种shellshock漏洞检测和漏洞利用，测试验证 上述 bro-shellshock 检测效果](#在-攻击机-上重复对-靶机-的各种shellshock漏洞检测和漏洞利用测试验证-上述-bro-shellshock-检测效果)
+* [bro 当前产生的日志保存在 /usr/local/bro/logs/current 默认配置的bro每隔1小时将 current 目录下的所有日志归档到 /usr/local/bro/logs 下的 yyyy-mm-dd 子目录](#bro-当前产生的日志保存在-usrlocalbrologscurrent-默认配置的bro每隔1小时将-current-目录下的所有日志归档到-usrlocalbrologs-下的-yyyy-mm-dd-子目录)
 	* [suricata](#suricata)
+* [漏洞利用的主流形式](#漏洞利用的主流形式)
+	* [Apache mod_cgi 环境中的 CVE-2014-6271 触发原理](#apache-mod_cgi-环境中的-cve-2014-6271-触发原理)
+	* [DHCP client 中的 CVE-2014-6271 触发原理](#dhcp-client-中的-cve-2014-6271-触发原理)
+	* [OpenSSH 的 ***ForceCommand*** 被利用来触发 CVE-2014-6271](#openssh-的-forcecommand-被利用来触发-cve-2014-6271)
 * [漏洞利用的其他形式](#漏洞利用的其他形式)
-* [参考资料](#参考资料)
+	* [PHP &lt; 5.6.2 - 'Shellshock' 'disable_functions()' Bypass Command Injection](#php-lt-562---shellshock-disable_functions-bypass-command-injection)
+	* [Shellshock – Targeting Non-CGI PHP](#shellshock--targeting-non-cgi-php)
+* [其他相似漏洞](#其他相似漏洞)
+	* [httpoxy](#httpoxy)
+		* [参考资料](#参考资料)
+* [参考资料](#参考资料-1)
 
 <!-- vim-markdown-toc -->
 
@@ -104,7 +132,7 @@ sudo $(which docker-compose) up -d
 PYENV_CACHE="~/.pyenv/cache"
 PY_VER="3.6.4" # 根据需要修改为你想要安装的python版本号
 PY_URL="http://mirrors.sohu.com/python/${PY_VER}/Python-${PY_VER}.tar.xz"
-[ -d ${PYENV_CACHE} ] ||  mkdir -p ${PYENV_CACHE} 
+[ -d ${PYENV_CACHE} ] ||  mkdir -p ${PYENV_CACHE}
 cd ${PYENV_CACHE} && wget ${PY_URL}
 [ $? -eq 0 ] && pyenv install ${PY_VER}
 ```
@@ -276,13 +304,13 @@ msfdb init
 msfconsole
 # 以下命令在 msfconsole 中输入
 
-# 重建缓存是在后台执行的，需要很长时间 
+# 重建缓存是在后台执行的，需要很长时间
 db_rebuild_cache
 
 # 搜索 bash 相关exploit
-# 在缓存没有重建完毕之前，会有一个警告信息提示如下，可以安全的忽略掉： 
+# 在缓存没有重建完毕之前，会有一个警告信息提示如下，可以安全的忽略掉：
 # [!] Module database cache not built yet, using slow search
-search base 
+search base
 
 use exploit/multi/http/apache_mod_cgi_bash_env_exec
 
@@ -383,7 +411,7 @@ body;
 
 其中，``function`` 和 ``func_name`` 均可以省略，而 ``函数体`` 的定义可以使用 ``:`` 来表示``什么都不执行``，类似于 ``python`` 里的 ``pass``。所以，``() {:;}`` 就是定义了一个空的匿名Bash函数。其中，``()``之间不能有空格，``() { ``需要用函数定义最严格的写法，不能随意增减``{``左右两边的空格（具体原因见以下Bash相关功能的源代码详解）。函数体内可以有多个空格，不影响代码定义。``;`` 是 Bash 的语句结束分隔符，单行 Bash 脚本通常会用到分号。``echo vulnerable`` 通过一个分号紧跟着 ``() {:;}`` ，所以相当于是单行Bash脚本先完成前一个匿名空函数定义，再执行一条打印语句。 ``env x='<value>'``的作用是将单引号内的内容当作普通文本赋值给环境变量 ``x`` 。
 
-``/usr/local/bash-4.3.0/bin/bash -c "echo this is a test"`` 这里之所以使用 Bash 绝对路径，而不是直接使用 ``bash``，是因为在我们的靶机环境中，实际上有2个不同版本的Bash。其中，存在 ``shellshock`` 相关漏洞的Bash版本对应的就是这里的``/usr/local/bash-4.3.0/bin/bash``。如果直接使用 ``bash`` ，根据系统环境变量 ``$PATH`` 的设置，执行 ``bash`` 相当于执行的是 ``/bin/bash`` ，即已打了 ``shellshock`` 漏洞补丁的Bash。 
+``/usr/local/bash-4.3.0/bin/bash -c "echo this is a test"`` 这里之所以使用 Bash 绝对路径，而不是直接使用 ``bash``，是因为在我们的靶机环境中，实际上有2个不同版本的Bash。其中，存在 ``shellshock`` 相关漏洞的Bash版本对应的就是这里的``/usr/local/bash-4.3.0/bin/bash``。如果直接使用 ``bash`` ，根据系统环境变量 ``$PATH`` 的设置，执行 ``bash`` 相当于执行的是 ``/bin/bash`` ，即已打了 ``shellshock`` 漏洞补丁的Bash。
 
 接下来，我们直奔Bash源代码仓库，查看变更历史：http://git.savannah.gnu.org/cgit/bash.git/log/ ，CVE-2014-6271 作为 Shellshock 系列漏洞中第一个被曝光的，其修复时间是在 2014-09-25，因此，我们可以查看一下这次修补涉及到哪些源文件和代码。
 
@@ -397,7 +425,7 @@ body;
 * subst.c
 * variables.c
 
-经过阅读 diff 结果，我们可以第一步锁定问题代码出在了 ``variables.c``，问题函数是 ``initialize_shell_variables()``。漏洞利用代码中，``env`` 定义的环境变量，被这里的 ``initialize_shell_variables()`` 读入处理了。 
+经过阅读 diff 结果，我们可以第一步锁定问题代码出在了 ``variables.c``，问题函数是 ``initialize_shell_variables()``。漏洞利用代码中，``env`` 定义的环境变量，被这里的 ``initialize_shell_variables()`` 读入处理了。
 
 ```diff
 @@ -358,13 +358,11 @@ initialize_shell_variables (env, privmode)
@@ -477,7 +505,7 @@ parse_and_execute (string, from_file, flags)
 	   另外，parse_command() 是在 eval.c 的 read_command() 中被调用的
 	   read_command() 在 eval.c 的 reader_loop() 中被调用
 	*/
-    if (parse_command () == 0) 
+    if (parse_command () == 0)
 	  {
 	  if ((flags & SEVAL_PARSEONLY) || (interactive_shell == 0 && read_but_dont_execute))
 	    {
@@ -521,7 +549,7 @@ parse_and_execute (string, from_file, flags)
 		  command->value.Simple->redirects->redirector.dest == 0)
 		    {
 		      int r;
-		      r = cat_file (command->value.Simple->redirects); 
+		      r = cat_file (command->value.Simple->redirects);
 		      last_result = (r < 0) ? EXECUTION_FAILURE : EXECUTION_SUCCESS;
 		    }
 	      else
@@ -608,6 +636,40 @@ GREP_OPTIONS='-v' grep one test.txt
 
 > If the -c option is present, then commands are read from the first non-option argument command_string.  If there are arguments after  the command_string, they are assigned to the positional parameters, starting with $0.
 
+### 关于 env
+
+``env`` 来自 [GNU Coreutils](https://www.gnu.org/software/coreutils/coreutils.html) 中的 [env.c](http://git.savannah.gnu.org/gitweb/?p=coreutils.git;a=blob;f=src/env.c;hb=HEAD) 。上述 shellshock 漏洞利用中用到的典型 PoC 形式：``env x='() { :;}; echo vulnerable' /usr/local/bash-4.3.0/bin/bash -c "echo this is a test"`` 的内部实现最终是依靠系统调用 ``execvp()`` 执行。而根据``man execvp``可知：
+
+> The  exec() family of functions replaces the current process image with a new process image.  The functions described in this manual page are front-ends for execve(2).
+
+> The execlp(), execvp(), and execvpe() functions duplicate the actions of the shell in searching for an executable file if the specified filename does not  contain  a  slash  (/) character.   The  file  is  sought  in the colon-separated list of directory pathnames specified in the PATH environment variable.  If this variable isn't defined, the path list defaults to the current directory followed by the list of directories returned by confstr(_CS_PATH).  (This confstr(3) call typically returns the value "/bin:/usr/bin".)
+
+在调用 ``execvp()`` 之前，``env.c`` 内部会先进行参数解析和环境变量的识别与设置，其中设置环境变量的代码如下：
+
+```c
+char *eq;
+while (optind < argc && (eq = strchr (argv[optind], '=')))
+  {
+    if (putenv (argv[optind])) /* 执行系统调用设置了环境变量，所以 Bash 在后续执行过程中会执行到对 **用户构造的环境变量** 的解析。而恰好bash判断一个环境变量是不是一个函数，就看它的值是否以 "() {" 开始，进而有机会将 **用户构造的环境变量** 传入了 parse_and_execute() 函数，导致了“任意代码执行” */
+      {
+        *eq = '\0';
+        die (EXIT_CANCELED, errno, _("cannot set %s"),
+             quote (argv[optind]));
+      }
+    optind++;
+  }
+```
+
+所以在读懂了上述源代码之后，我们就可以理解，网络上流传的关于 CVE-2014-6271 的漏洞原理分析中，类似[安天 Bash远程代码执行漏洞“破壳”（CVE-2014-6271）分析](http://www.antiy.com/response/CVE-2014-6271.html) 的以下这些说法是典型的“张冠李戴”。
+
+> 从阐述的漏洞原理可知，漏洞的根本原因存在于bash的ENV命令实现上
+
+勘误：**env（不是大写）不是Bash命令，是独立的GNU Coreutils工具中的一个独立程序**。
+
+> 导致漏洞出问题是以“(){”开头定义的环境变量在命令ENV中解析成函数后
+
+勘误：不是``(){``，是``() {``（注意空格）。不是在``env``中解析成函数，而是在Bash的``variables.c``中被判断为函数，然后调用了``evalstring.c``中的``parse_and_execute()``完成了函数体定义执行。
+
 # 漏洞利用检测
 
 根据 [CVE-2014-6271的漏洞原理分析](#cve-2014-6271-1)，我们知道 ``() {`` 是该漏洞利用 **无法绕过** 的一个漏洞利用 payload 关键字。
@@ -631,17 +693,86 @@ cd bro-2.5.2
 make
 sudo make install
 sudo make install-aux
+
+# 可以使用 pyenv 安装的 python 3.6.4 环境
+pip install bro-pkg
+
+# 确保 bro-pkg 下载的脚本能被写入当前bro安装路径下的 script_dir 和 plugin_dir
+# script_dir: set to the location of Bro’s site scripts directory (e.g. <bro_install_prefix>/share/bro/site)
+# plugin_dir: set to the location of Bro’s default plugin directory (e.g. <bro_install_prefix>/lib/bro/plugins)
+# 源码方式安装的bro，默认 <bro_install_prefix> 是 /usr/local/bro
+bro-pkg autoconfig
+
+# 修改 script_dir 和 plugin_dir 的权限，使得当前用户执行 bro-pkg install 时可以直接写入相关目录
+sudo chgrp $USER $(bro-config --site_dir) $(bro-config --plugin_dir)
+sudo chmod g+rwX $(bro-config --site_dir) $(bro-config --plugin_dir)
+
+# 编辑 <bro_install_prefix>/share/bro/site/local.bro
+# 添加@load packages 到上述文件的最后一行
+# 实现 bro-pkg install 的bro脚本和插件能够被自动加载
+echo '@load packages' >> /usr/local/bro/share/bro/site/local.bro
+
+# 从源码仓库检查并刷新 bro-pkg 本地缓存的pkg元数据信息
+bro-pkg refresh
+
+# 安装 shellshock 检测插件
+bro-pkg install corelight/bro-shellshock
+
+# 编辑 /usr/local/bro/etc/node.cfg 修改 interface 为 bro 监听的网卡标识
+
+# 解决 bro 在进行TCP/UDP报文解析时无法正确计算报文校验和错误
+echo 'redef ignore_checksums = T;' > /usr/local/bro/share/bro/site/mytuning.bro
+echo '@load mytuning.bro' >> /usr/local/bro/share/bro/site/local.bro
+
+sudo $(which broctl) deploy
+
+# 经过上述配置，bro已经成功的运行起来，检查一下 bro 的运行情况
+ps aux | grep bro
+# root     17538  0.0  0.1  14304  3252 ?        S    12:37   0:00 /bin/bash /usr/local/bro/share/broctl/scripts/run-bro -1 -i ens19 -U .status -p broctl -p broctl-live -p standalone -p local -p bro local.bro broctl broctl/standalone broctl/auto
+# root     17544 36.6  9.4 517276 193380 ?       Rl   12:37   0:04 /usr/local/bro/bin/bro -i ens19 -U .status -p broctl -p broctl-live -p standalone -p local -p bro local.bro broctl broctl/standalone broctl/auto
+# root     17546  0.0  9.0 296080 185828 ?       SN   12:37   0:00 /usr/local/bro/bin/bro -i ens19 -U .status -p broctl -p broctl-live -p standalone -p local -p bro local.bro broctl broctl/standalone broctl/auto
+
+# 在 攻击机 上重复对 靶机 的各种shellshock漏洞检测和漏洞利用，测试验证 上述 bro-shellshock 检测效果
+# bro 当前产生的日志保存在 /usr/local/bro/logs/current 默认配置的bro每隔1小时将 current 目录下的所有日志归档到 /usr/local/bro/logs 下的 yyyy-mm-dd 子目录
+```
+
+⚠️ 注意⚠️  所有通过 ``bro-pkg`` 安装的第三方 bro 脚本都是没有经过官方开发团队审核的，安全性、可用性需要使用者自行判断！！
+
+[bro-shellshock/scripts/main.bro](https://github.com/corelight/bro-shellshock/blob/master/scripts/main.bro) 中用到了我们前述分析 CVE-2014-6271 漏洞触发原理时提到的关键字：``() {``，检测插件的作者考虑到了URL编码的情况之后编写出来的 **正则表达式形式检测特征签名** 如下：
+
+```bro
+## The pattern for matching shellshock attacks.  This is
+## also defined separately in the .sig file.
+const matcher = /.*(\(|%28)(\)|%29)( |%20)(\{|%7B)/ &redef;
 ```
 
 ## suricata
 
+# 漏洞利用的主流形式
+
+## Apache mod_cgi 环境中的 CVE-2014-6271 触发原理
+
+## DHCP client 中的 CVE-2014-6271 触发原理
+
+## OpenSSH 的 ***ForceCommand*** 被利用来触发 CVE-2014-6271
 
 
 # 漏洞利用的其他形式
 
-[PHP < 5.6.2 - 'Shellshock' 'disable_functions()' Bypass Command Injection](https://www.exploit-db.com/exploits/35146/)
+## [PHP &lt; 5.6.2 - 'Shellshock' 'disable_functions()' Bypass Command Injection](https://www.exploit-db.com/exploits/35146/)
 
 上面这个例子很好的说明了：一个漏洞的出现，往往会带来很多意想不到的创新利用方式。一个原本安全的防御机制（如这里的PHP的 ``函数黑名单机制`` 原本可以对命令注入攻击实现漏洞利用缓解效果）可能会因为一个第三方软件的漏洞而被绕过。这就是漏洞利用的艺术，这就是实际网络攻击往往不是单一漏洞利用过程的真实例子证明。
+
+## [Shellshock – Targeting Non-CGI PHP](https://www.securitysift.com/shellshock-targeting-non-cgi-php/)
+
+
+# 其他相似漏洞
+
+## httpoxy
+
+推荐看看  [HTTPOXY 漏洞说明 by Laruence](http://www.laruence.com/2016/07/19/3101.html)，该漏洞的详情参见[httpoxy 漏洞说明官网](https://httpoxy.org/)，涉及到的编程语言包括：PHP、Python和Go，涉及到的知名编程库包括：Python的 ``requests``，PHP的 ``Guzzle 4+``。
+
+概述一下这个漏洞的触发原理和利用方式就是：攻击者通过构造出名为 ``PROXY`` 的HTTP请求头并赋值为攻击者控制的一个 **HTTP 代理服务器地址** ，工作在 ``CGI(RFC 3875)`` 模式的HTTP服务器在接收到这个请求时自动加上 ``HTTP_`` 前缀，注册为环境变量（恰好名为 ``HTTP_PROXY``）。而很多Linux上的应用程序、编程语言的基础类库实现，都会在发起 HTTP 请求之前先检查环境变量 ``HTTP_PROXY`` 是否已设置。如果已设置，则读取该环境变量的值作为 HTTP 请求使用的 ``HTTP代理服务器地址``。这就意味着，攻击者可以 **劫持** 服务器端的对外HTTP请求实现中间人攻击。而很多服务器的对外HTTP请求会涉及到诸如访问控制、敏感数据操作等，一旦对外请求被劫持，就意味着攻击者有可能拿到诸如：``Secret Token``、第三方服务器返回的``Access Token``等机密数据和认证凭据。除此之外，攻击者可以直接 **劫持** 服务器去访问内网资源、进行网络扫描、参与DDoS攻击等。
 
 # 参考资料
 
@@ -653,4 +784,3 @@ sudo make install-aux
 * [BurpSuite主动和被动扫描插件 ActiveScan++，可以检测 CVE-2014-6271/CVE-2014-6278 存在性](https://github.com/albinowax/ActiveScanPlusPlus)
 * [ShellShock attack and exploit detector for Bro.](https://github.com/corelight/bro-shellshock)
 * [p0wnage and detection with Bro](https://www.bro.org/brocon2015/slides/sharma_p0wnage.pdf)
-
