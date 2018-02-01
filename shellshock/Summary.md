@@ -247,7 +247,7 @@ db_rebuild_cache
 # 搜索 bash 相关exploit
 # 在缓存没有重建完毕之前，会有一个警告信息提示如下，可以安全的忽略掉：
 # [!] Module database cache not built yet, using slow search
-search base
+search bash
 
 use exploit/multi/http/apache_mod_cgi_bash_env_exec
 
@@ -264,7 +264,14 @@ check
 # 查看所有可用的攻击向量
 show payloads
 
-set linux/x86/meterpreter/reverse_tcp
+# 在 show options 的输出结果里会有类似以下输出
+# Exploit target:
+#
+#   Id  Name
+#   --  ----
+#   0   Linux x86
+# 当前攻击目标的Id如上所示，为0
+set 0 linux/x86/meterpreter/reverse_tcp
 
 # 查看攻击向量的所有可用配置参数
 show options
@@ -685,14 +692,84 @@ const matcher = /.*(\(|%28)(\)|%29)( |%20)(\{|%7B)/ &redef;
 
 ## suricata
 
+### 安装
+
+```
+# Ubuntu 16.04 官方APT源里的 suricata 版本太旧
+apt-cache policy suricata
+suricata:
+  Installed: (none)
+  Candidate: 3.0-1
+  Version table:
+     3.0-1 500
+        500 http://cn.archive.ubuntu.com/ubuntu xenial/universe amd64 Packages
+```
+
+```bash
+# 参照suricata官方安装建议
+# http://suricata.readthedocs.io/en/latest/install.html#ubuntu
+sudo add-apt-repository ppa:oisf/suricata-stable
+# 可能会遇到 Operation too slow. Less than 10 bytes/sec transferred the last 120 seconds
+# ppa 的相关网站在国内访问是个坑，不稳定，实在不行也可以更换为源代码方式编译安装
+# ref: http://suricata.readthedocs.io/en/latest/install.html#source
+# 源码方式编译安装的最后一步建议使用 sudo make install-full
+# 等价于： make install && make install-conf && make install-rules
+sudo apt-get update
+
+# 验证当前可用的 suricata 版本
+apt-cache policy suricata
+
+sudo apt-get install suricata
+```
+
+### 基本配置
+
+源码方式编译安装的 ``suricata`` 默认配置文件目录在 ``/usr/local/etc/suricata/`` ，默认输出目录在 ``/usr/local/var/log/suricata`` 。
+
+```bash
+# 如果运行 suricata 提示缺少 htp 库文件，则需要手工安装之
+sudo apt install libhtp1
+```
+
+[Suricata官方最新版本文档](http://suricata.readthedocs.io/en/latest/)
+
+### 使用
+
+```bash
+# 检测结果日志文件保存在 /usr/local/var/log/suricata/
+sudo suricata -r sample-exploit.pcap -k none
+```
+
 # 漏洞利用的主流形式
 
 ## Apache mod_cgi 环境中的 CVE-2014-6271 触发原理
 
+安天的这个漏洞分析报告：[Bash远程代码执行漏洞“破壳”（CVE-2014-6271）分析](http://www.antiy.com/response/CVE-2014-6271.html) 用一张图很形象的解释了 Apache mod_cgi 环境中的 CVE-2014-6271 漏洞触发原理。
+
+![](attach/img/antiy-cve-2014-6271-demo.png)
+
+[分别用metasploit的TCP反向连接exploit和curl手工构造nc反弹连接exploit的抓包实例 sample-exploit.pcap](attach/pcap/sample-exploit.pcap)，从 ``sample-exploit.pcap`` 中提取出 ``metasploit`` 的 ``linux/x86/meterpreter/reverse_tcp`` 攻击向量上传到 [virustotal 扫描结果](https://www.virustotal.com/#/file/ea5af27950463a72262f18ee83fa7a609d3f8462d50ac73d1824e5dead916cc1/detection) 如下图所示：
+
+![](attach/img/ckiZV.png)
+
+另外，在 ``sample-exploit.pcap`` 中同时记录了直接使用 ``nc + bash反弹连接`` 方式的攻击向量，通过对比可以发现：虽然都是针对 ``CVE-2014-6271`` 的漏洞利用，但具体加载的 ``攻击向量`` 具有较大差异。以 ``CVE-2014-6271`` 的漏洞利用为例，我们可以按照 [CAPEC](https://capec.mitre.org/) 把这里的``攻击模式``归类为 [``代码注入``](https://capec.mitre.org/data/definitions/242.html)，该模式的攻击过程可以简单分为：``进入阶段``（**通过构造特殊格式数据绕过原有数据流控制机制，使得攻击者构造的 可执行数据 能够到达可以执行任意代码的代码块**） + ``加载攻击向量执行阶段``。类似的，``CVE-2014-6271`` 按照 [CWE](https://cwe.mitre.org) 的软件缺陷机理分类，属于 [CWE-94: Improper Control of Generation of Code ('Code Injection')](https://cwe.mitre.org/data/definitions/94.html)
+
 ## DHCP client 中的 CVE-2014-6271 触发原理
+
+[Bash Bug Saga Continues: Shellshock Exploit Via DHCP](https://blog.trendmicro.com/trendlabs-security-intelligence/bash-bug-saga-continues-shellshock-exploit-via-dhcp/)，需要注意的是 metasploit 也提供了该种攻击方式的免费攻击模块[auxiliary/server/dhclient_bash_env](https://www.rapid7.com/db/modules/auxiliary/server/dhclient_bash_env)。
+
+这种攻击方式一般发生在局域网中，攻击者搭建一个恶意DHCP服务器，配置为在接收到Linux 客户端的 ``DHCP Discover`` 包后，构建 ``DHCP Offer`` 包，里面包含有IP地址、子网掩码等参数，其中额外Option中，有一个114号的参数，代表Url参数。Linux 客户端接收到该 ``DHCP Offer`` 后，经过Request、Ack后，将调用Bash对端口以相关参数赋值，其中``Option 114``后面的字符串将被当作环境变量。剩下的就是在DHCP流程结束之前，客户端环境变量中的攻击指令将被自动执行。
+
+相比较于通过 Apache mod_cgi 环境的远程代码执行方式，DHCP 客户端环境中的漏洞触发存在一些限制条件：
+
+* 局域网中的DHCP请求只会发生在新设备接入时或已有的DHCP租期到期时，所以这是一种 **被动式** 攻击；
+* 如果企业内网环境部署了类似[DHCP snooping](https://en.wikipedia.org/wiki/DHCP_snooping)技术的话，则攻击者搭建的恶意DHCP服务器将无法向局域网中的DHCP请求提供服务；
 
 ## OpenSSH 的 ***ForceCommand*** 被利用来触发 CVE-2014-6271
 
+``ForceCommand`` 一般是 SSH 服务器用来限制远程连入用户在当前服务器上可以执行的命令范围，但如果服务器存在 ``CVE-2014-6271`` 漏洞，则恶意用户可以通过在服务器上的 ``~/.ssh/authorized_keys`` 文件中添加[精心构造的用户公钥信息中嵌入Bash指令](https://unix.stackexchange.com/questions/157477/how-can-shellshock-be-exploited-over-ssh)来实现绕过这个限制。
+
+相比较于前两种攻击方式，这里的攻击方式需要攻击者在远程服务器上已有一个合法SSH账号，对于攻击者来说，攻击成本会较高。
 
 # 漏洞利用的其他形式
 
