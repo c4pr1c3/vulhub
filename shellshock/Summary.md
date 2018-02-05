@@ -740,6 +740,47 @@ sudo apt install libhtp1
 sudo suricata -r sample-exploit.pcap -k none
 ```
 
+## C&C 检测
+
+实验发现使用 metasploit 框架的2种不同反弹连接 payload：
+
+* linux/x86/meterpreter_reverse_https
+* linux/x86/meterpreter_reverse_tcp
+
+都对通信负载进行了加密，其中 ``linux/x86/meterpreter_reverse_https`` 的[通信样本](attach/pcap/meterpreter_reverse_https.pcap) 并没有捕获到完整的 SSL/TLS 握手过程，推测可能是用的自定义 SSL 协议？
+
+使用 ``linux/x86/meterpreter_reverse_tcp`` 的通信样本：[sample-exploit.pcap](attach/pcap/sample-exploit.pcap) 。
+
+另外，在 Metasloit 的 meterpreter 控制会话窗口里执行 ``exit`` 有时会导致控制端已经关闭了监听端口，但植入端依然在定时、反复重试连接控制端的监听端口。可能是反向连接攻击负载的bug？
+
+通过人工分析上述2个通信样本，发现使用 ``packet bytes`` 特征 ``core_patch_url`` 可以准确定位到 meterpreter 上述2种反弹连接的会话流量（如下图所示）。个人推测这应该是攻击负载开发者故意留下的一个攻击特征，避免 Metasloit 被广泛应用于真实网络攻击活动之中和逃避入侵检测。
+
+![](attach/img/meterpreter_reverse_shell_signature.png)
+
+另外，对于已知协议流量“跑”在非协议标准端口的情况，Wireshark 支持人工 ``decode as ...`` 选择你“猜测”的、标准协议解析器去解析非协议标准端口的流量，但是如果是在真实网络环境中呢？为此，我特地查阅了 ``Bro`` 的协议分析代码，发现也是通过 **硬编码** 的方式，在 ``<bro_install_prefix>/base/protocols/ssl/main.bro`` 中定义了几个 **常见**、**可能** 承载 SSL 流量的端口。
+
+```bro
+const ssl_ports = {
+	443/tcp, 563/tcp, 585/tcp, 614/tcp, 636/tcp,
+	989/tcp, 990/tcp, 992/tcp, 993/tcp, 995/tcp, 5223/tcp
+};
+
+# There are no well known DTLS ports at the moment. Let's
+# just add 443 for now for good measure - who knows :)
+const dtls_ports = { 443/udp };
+
+redef likely_server_ports += { ssl_ports, dtls_ports };
+
+event bro_init() &priority=5
+	{
+	Log::create_stream(SSL::LOG, [$columns=Info, $ev=log_ssl, $path="ssl"]);
+	Analyzer::register_for_ports(Analyzer::ANALYZER_SSL, ssl_ports);
+	Analyzer::register_for_ports(Analyzer::ANALYZER_DTLS, dtls_ports);
+	}
+```
+
+所以，从网络流量识别和分类技术的角度来看，即使不考虑对加密流量和私有协议流量的识别和分类问题，明文、标准协议流量运行在非协议标准端口的识别和分类问题也是一个不小的工程实现挑战（对于无法识别协议的流量、遍历应用其他协议识别算法进行尝试解码识别应该是无法避免的）。
+
 # 漏洞利用的主流形式
 
 ## Apache mod_cgi 环境中的 CVE-2014-6271 触发原理
