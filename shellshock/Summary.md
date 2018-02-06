@@ -781,6 +781,15 @@ event bro_init() &priority=5
 
 所以，从网络流量识别和分类技术的角度来看，即使不考虑对加密流量和私有协议流量的识别和分类问题，明文、标准协议流量运行在非协议标准端口的识别和分类问题也是一个不小的工程实现挑战（对于无法识别协议的流量、遍历应用其他协议识别算法进行尝试解码识别应该是无法避免的）。
 
+以下是我基于 Bro 编写的2个异常检测算法 PoC 脚本：
+
+* [abnormal-ua.bro](attach/bro/abnormal-ua.bro) 实现了一个朴素的检测HTTP请求头中异常 ``User-Agent`` 的 bro 脚本
+* [meterpreter.bro](attach/bro/meterpreter.bro) 实现了一个朴素的 ``meterpreter`` 反弹连接流量识别的 bro 脚本，并且尝试实现了一个基于 Bro 的 ``SumStats`` 框架的数据报文按照TCP报文应用层负载长度在单位时间内、单个发起IP聚类统计出现次数算法。需要注意的是，如果是用 ``读取pcap`` 文件方式执行算法，则需要添加 ``--pseudo-realtime`` 参数运行 bro（模拟在线抓包模式的处理，bro会按照pcap文件中数据包的相对到达时间依次读取报文处理。如果不加这个参数，bro会忽略实际报文到达的间隔时间，顺序、尽快读取并尽快处理每一个报文），否则bro内部时钟在处理数据报文的时刻点计算上可能存在bug？导致每次读取pcap文件执行算法得出的统计数据不同。
+
+对于在线检测来说，应尽可能避免在 Bro 的处理过程中使用过多复杂算法，类似 ``SumStats`` 框架的处理方式通常可以用外部程序来处理，降低 Bro 工作线程/进程的计算负载和内存消耗。[Kitware/bat](https://github.com/Kitware/bat) 作为一个基于Bro框架的机器学习开发框架，成功的将复杂计算从 Bro 的工作线程/进程中解耦。除此之外，利用 [ELK](https://www.elastic.co/webinars/introduction-elk-stack) 、[splunk](https://www.splunk.com/) 之类的海量日志处理框架也经常被用来将 Bro 实时产生或离线的日志导入其中进行独立分析。
+
+[Bro 官网的研究项目](https://www.bro.org/research/index.html) 中 ``HILTI: A High-level Intermediary Language for Traffic Analysis`` 和 ``BinPAC++: A Next-Generation Parser Generator for Network Protocols`` 是2个目前正处于学术研究阶段的面向协议识别和流量分析的独立子项目，暂时还没有达到生产环境中部署使用的成熟度。
+
 # 漏洞利用的主流形式
 
 ## Apache mod_cgi 环境中的 CVE-2014-6271 触发原理
